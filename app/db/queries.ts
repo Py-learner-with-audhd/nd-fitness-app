@@ -120,3 +120,51 @@ export async function getExercisesForSession(
     sessionId
   );
 }
+
+export async function getTotalWorkouts(db: SQLiteDatabase): Promise<number> {
+  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM sessions');
+  return row?.count ?? 0;
+}
+
+// All logged sets with enough context to compute dashboard stats in JS —
+// simpler and more maintainable than a window-function query for this data volume.
+export async function getAllSetsForStats(
+  db: SQLiteDatabase
+): Promise<{ variationId: number; weight: number; reps: number; date: string }[]> {
+  return db.getAllAsync(
+    `SELECT eis.variation_id as variationId, s.weight, s.reps, sess.date
+     FROM sets s
+     JOIN exercises_in_session eis ON eis.id = s.exercise_in_session_id
+     JOIN sessions sess ON sess.id = eis.session_id
+     ORDER BY sess.date ASC, s.id ASC`
+  );
+}
+
+export async function getVariationsWithData(
+  db: SQLiteDatabase
+): Promise<{ id: number; name: string; slotName: string }[]> {
+  return db.getAllAsync(
+    `SELECT DISTINCT v.id, v.name, sl.name as slotName
+     FROM variations v
+     JOIN slots sl ON sl.id = v.slot_id
+     JOIN exercises_in_session eis ON eis.variation_id = v.id
+     JOIN sets s ON s.exercise_in_session_id = eis.id
+     ORDER BY sl.order_index, v.id`
+  );
+}
+
+export async function getWeightHistoryForVariation(
+  db: SQLiteDatabase,
+  variationId: number
+): Promise<{ date: string; maxWeight: number }[]> {
+  return db.getAllAsync(
+    `SELECT sess.date as date, MAX(s.weight) as maxWeight
+     FROM sets s
+     JOIN exercises_in_session eis ON eis.id = s.exercise_in_session_id
+     JOIN sessions sess ON sess.id = eis.session_id
+     WHERE eis.variation_id = ?
+     GROUP BY sess.id
+     ORDER BY sess.date ASC`,
+    variationId
+  );
+}

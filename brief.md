@@ -41,6 +41,13 @@ Full-body, every session, 2-3x/week — same slot template each time, ~18 exerci
 | Arms | — | — | Barbell curl + hammer curl (biceps), pushdown + overhead extension (triceps) — all four run each session |
 | Calves | Calf raise | — | — |
 
+## Dashboard (added 2026-08-15)
+A separate screen (link from Start, next to History) showing:
+- Stat tiles: total workouts, total volume (kg, sum of weight×reps), current PRs (count of variations where the most recent set matches the all-time max weight for that variation)
+- A per-variation progress chart (weight over time) — pick a lift from a chip row, see a line chart of its max weight per session
+
+Deliberately left out (per the interview that scoped v1): muscle-group donut chart and a recent-workouts table, since History already covers the latter and the former is decorative rather than functional. Chart follows the studio's dataviz method: single series needs no legend, 2px round-cap line, direct-labeled endpoint only, hairline gridlines, validated sequential blue (`#2a78d6`).
+
 ## Explicitly out of scope for v1
 - Multi-user accounts/login
 - Social features, streaks, badges, notifications/reminders
@@ -77,4 +84,4 @@ Considered folding in MyFitnessPal-style nutrition tracking and Stance/Gpath-sty
 - **Phase 3 — VBT integration:** blocked until Emmet owns a Stance/Gpath/generic BLE bar-speed sensor. Even then, likely needs reverse-engineered Bluetooth integration since these products don't appear to expose a public third-party API — worth checking directly with the vendor before buying hardware on the assumption it'll be scriptable.
 
 ## Status
-Native app (Expo Go) built and working — full session flow tested end-to-end on Emmet's phone. Pivoting distribution to web/PWA for gym use without a laptop nearby; web export builds and the SQLite-on-web blocker is fixed, still need to deploy to real HTTPS hosting and verify there.
+Live and verified: https://py-learner-with-audhd.github.io/nd-fitness-app/ — deployed to GitHub Pages, full session flow (capacity check-in → exercise logging → screen transitions) tested end-to-end on the real HTTPS URL. Repo: https://github.com/Py-learner-with-audhd/nd-fitness-app. Source on `main`, built site on `gh-pages` branch (redeploy with `npx gh-pages -d dist --dotfiles` after `npx expo export -p web` from `app/`). Next: add to iPhone home screen and confirm it works as a standalone-feeling app there.

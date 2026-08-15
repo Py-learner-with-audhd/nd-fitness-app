@@ -13,9 +13,11 @@ const CAPACITY_OPTIONS: { value: CapacityRating; label: string; suggestedSets: n
 export default function StartSessionScreen({
   onSessionStarted,
   onViewHistory,
+  onViewDashboard,
 }: {
   onSessionStarted: (sessionId: number) => void;
   onViewHistory: () => void;
+  onViewDashboard: () => void;
 }) {
   const db = useSQLiteContext();
   const [starting, setStarting] = useState(false);
@@ -49,9 +51,14 @@ export default function StartSessionScreen({
           </TouchableOpacity>
         ))}
       </View>
-      <TouchableOpacity style={styles.historyLink} onPress={onViewHistory}>
-        <Text style={styles.historyLinkText}>View history</Text>
-      </TouchableOpacity>
+      <View style={styles.links}>
+        <TouchableOpacity onPress={onViewDashboard}>
+          <Text style={styles.historyLinkText}>Dashboard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onViewHistory}>
+          <Text style={styles.historyLinkText}>View history</Text>
+        </TouchableOpacity>
+      </View>
       {error && <Text style={styles.error}>Error: {error}</Text>}
     </View>
   );
@@ -91,7 +98,9 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  historyLink: {
+  links: {
+    flexDirection: 'row',
+    gap: 24,
     marginTop: 12,
   },
   historyLinkText: {

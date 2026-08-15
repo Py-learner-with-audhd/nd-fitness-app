@@ -5,11 +5,13 @@ import { migrateDbIfNeeded } from './db/schema';
 import StartSessionScreen from './screens/StartSessionScreen';
 import ActiveSessionScreen from './screens/ActiveSessionScreen';
 import HistoryScreen from './screens/HistoryScreen';
+import DashboardScreen from './screens/DashboardScreen';
 
 type Screen =
   | { name: 'start' }
   | { name: 'active'; sessionId: number }
-  | { name: 'history' };
+  | { name: 'history' }
+  | { name: 'dashboard' };
 
 export default function App() {
   return (
@@ -32,6 +34,7 @@ function AppContent() {
         <StartSessionScreen
           onSessionStarted={(sessionId) => setScreen({ name: 'active', sessionId })}
           onViewHistory={() => setScreen({ name: 'history' })}
+          onViewDashboard={() => setScreen({ name: 'dashboard' })}
         />
       )}
       {screen.name === 'active' && (
@@ -41,6 +44,7 @@ function AppContent() {
         />
       )}
       {screen.name === 'history' && <HistoryScreen onBack={() => setScreen({ name: 'start' })} />}
+      {screen.name === 'dashboard' && <DashboardScreen onBack={() => setScreen({ name: 'start' })} />}
       <StatusBar style="auto" />
     </>
   );
