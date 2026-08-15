@@ -24,6 +24,19 @@ export async function getSlotsWithVariations(
   return out;
 }
 
+export async function addVariation(
+  db: SQLiteDatabase,
+  slotId: number,
+  name: string
+): Promise<number> {
+  const result = await db.runAsync(
+    'INSERT INTO variations (slot_id, name, is_default) VALUES (?, ?, 0)',
+    slotId,
+    name
+  );
+  return result.lastInsertRowId;
+}
+
 export async function createSession(
   db: SQLiteDatabase,
   capacityRating: CapacityRating

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import {
   addExerciseToSession,
   addSet,
+  addVariation,
   getLastSetForVariation,
   getSetsForExerciseInSession,
   getSlotsWithVariations,
@@ -40,6 +41,9 @@ export default function ActiveSessionScreen({
   const [reps, setReps] = useState(8);
   const [rir, setRir] = useState(2);
 
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customName, setCustomName] = useState('');
+
   useEffect(() => {
     getSlotsWithVariations(db).then((groups) => {
       setSlotGroups(groups);
@@ -63,6 +67,24 @@ export default function ActiveSessionScreen({
     setRir(last ? last.rir : 2);
   }
 
+  async function handleAddCustomVariation() {
+    if (!slotGroups) return;
+    const name = customName.trim();
+    if (!name) return;
+    const slot = slotGroups[slotIndex].slot;
+    const newId = await addVariation(db, slot.id, name);
+
+    const updatedGroups = slotGroups.map((g, i) =>
+      i === slotIndex
+        ? { ...g, variations: [...g.variations, { id: newId, slot_id: slot.id, name, is_default: 0 }] }
+        : g
+    );
+    setSlotGroups(updatedGroups);
+    setShowCustomInput(false);
+    setCustomName('');
+    await selectVariation(newId, updatedGroups, slotIndex);
+  }
+
   async function handleAddSet() {
     if (!exerciseInSessionId) return;
     await addSet(db, exerciseInSessionId, weight, reps, rir);
@@ -82,6 +104,8 @@ export default function ActiveSessionScreen({
     setExerciseInSessionId(null);
     setLastSet(null);
     setLoggedSets([]);
+    setShowCustomInput(false);
+    setCustomName('');
     const nextSlot = slotGroups[nextIndex];
     if (nextSlot.variations.length === 1) {
       selectVariation(nextSlot.variations[0].id, slotGroups, nextIndex);
@@ -116,6 +140,29 @@ export default function ActiveSessionScreen({
               <Text style={styles.variationOptionText}>{v.name}</Text>
             </TouchableOpacity>
           ))}
+
+          {showCustomInput ? (
+            <View style={styles.customInputRow}>
+              <TextInput
+                style={styles.customInput}
+                placeholder="Exercise name"
+                value={customName}
+                onChangeText={setCustomName}
+                autoFocus
+              />
+              <TouchableOpacity
+                style={styles.customUseBtn}
+                disabled={!customName.trim()}
+                onPress={handleAddCustomVariation}
+              >
+                <Text style={styles.customUseBtnText}>Use this</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.customToggle} onPress={() => setShowCustomInput(true)}>
+              <Text style={styles.customToggleText}>+ Type your own</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <View style={styles.exerciseBlock}>
@@ -226,6 +273,36 @@ const styles = StyleSheet.create({
   },
   variationOptionText: {
     fontSize: 16,
+  },
+  customToggle: {
+    paddingVertical: 10,
+  },
+  customToggleText: {
+    fontSize: 15,
+    color: '#333',
+  },
+  customInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  customInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+  },
+  customUseBtn: {
+    backgroundColor: '#333',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  customUseBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   exerciseBlock: {
     gap: 14,
