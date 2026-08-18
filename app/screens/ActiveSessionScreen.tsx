@@ -70,12 +70,7 @@ export default function ActiveSessionScreen({
       const groups = sortBySection(raw);
       setSlotGroups(groups);
       const start = groups[initialSlotIndex] ? initialSlotIndex : 0;
-      const first = groups[start];
-      if (first.variations.length === 1) {
-        selectVariation(first.variations[0].id, groups, start);
-      } else {
-        setExerciseName(defaultNameFor(first));
-      }
+      setExerciseName(defaultNameFor(groups[start]));
     });
   }, []);
 
@@ -142,12 +137,7 @@ export default function ActiveSessionScreen({
     setExerciseInSessionId(null);
     setLastSet(null);
     setLoggedSets([]);
-    const nextSlot = slotGroups[nextIndex];
-    if (nextSlot.variations.length === 1) {
-      selectVariation(nextSlot.variations[0].id, slotGroups, nextIndex);
-    } else {
-      setExerciseName(defaultNameFor(nextSlot));
-    }
+    setExerciseName(defaultNameFor(slotGroups[nextIndex]));
   }
 
   if (!slotGroups) {
