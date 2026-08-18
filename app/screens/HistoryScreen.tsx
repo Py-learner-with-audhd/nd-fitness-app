@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { useSQLiteContext } from 'expo-sqlite';
 import { getExercisesForSession, getSessionHistory, getSetsForExerciseInSession } from '../db/queries';
 import type { ExerciseInSession, Session, SetEntry } from '../types';
+import { colors, mono, radius, spacing, type } from '../theme';
 
 type ExerciseWithNames = ExerciseInSession & { slot_name: string; variation_name: string };
 
@@ -39,7 +40,7 @@ export default function HistoryScreen({ onBack }: { onBack: () => void }) {
       </TouchableOpacity>
       <Text style={styles.title}>History</Text>
 
-      {sessions === null && <Text>Loading...</Text>}
+      {sessions === null && <Text style={styles.empty}>Loading...</Text>}
       {sessions !== null && sessions.length === 0 && (
         <Text style={styles.empty}>No sessions logged yet.</Text>
       )}
@@ -77,35 +78,37 @@ export default function HistoryScreen({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 24,
-    gap: 16,
+    backgroundColor: colors.bg,
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
   backLink: {
     fontSize: 15,
-    color: '#333',
-    textDecorationLine: 'underline',
+    fontWeight: '600',
+    color: colors.accent,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...type.title,
   },
   empty: {
-    color: '#666',
+    color: colors.inkMuted,
   },
   sessionCard: {
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 16,
-    gap: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   sessionDate: {
+    ...mono,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: colors.accent,
   },
   exerciseList: {
-    gap: 10,
+    gap: spacing.md,
   },
   exerciseRow: {
     gap: 2,
@@ -113,10 +116,12 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 14,
     fontWeight: '600',
+    color: colors.ink,
   },
   setLine: {
+    ...mono,
     fontSize: 13,
-    color: '#555',
-    marginLeft: 8,
+    color: colors.inkMuted,
+    marginLeft: spacing.sm,
   },
 });

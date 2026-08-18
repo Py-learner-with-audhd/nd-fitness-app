@@ -45,7 +45,7 @@ function AppContent() {
       )}
       {screen.name === 'history' && <HistoryScreen onBack={() => setScreen({ name: 'start' })} />}
       {screen.name === 'dashboard' && <DashboardScreen onBack={() => setScreen({ name: 'start' })} />}
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </>
   );
 }

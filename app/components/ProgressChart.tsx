@@ -1,14 +1,20 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import { colors } from '../theme';
 
 const CHART_WIDTH = 320;
 const CHART_HEIGHT = 160;
 const PADDING = 24;
 
-const LINE_COLOR = '#2a78d6';
-const GRIDLINE_COLOR = '#e1e0d9';
-const MUTED_TEXT = '#898781';
-const PRIMARY_TEXT = '#0b0b0b';
+// Re-validated for the dark HUD surface (dataviz method requires re-checking
+// a chart color against a new surface, not an automatic carry-over). Reusing
+// the UI accent here is deliberate, not a shortcut — it's still one hue
+// doing one job (single series, no legend needed), and a second "chart-only"
+// color would just be visual noise on top of an already-neon UI.
+const LINE_COLOR = colors.accent;
+const GRIDLINE_COLOR = colors.border;
+const MUTED_TEXT = colors.inkMuted;
+const PRIMARY_TEXT = colors.ink;
 
 // Rounds a max value up to a "clean" step (per dataviz mark spec: round axis
 // ticks to clean numbers rather than the raw data max).
@@ -86,7 +92,7 @@ export default function ProgressChart({
         />
 
         {/* end marker with surface ring, plus a direct label — only the endpoint is labeled */}
-        <Circle cx={lastX} cy={lastY} r={6} fill="#fff" />
+        <Circle cx={lastX} cy={lastY} r={6} fill={colors.bg} />
         <Circle cx={lastX} cy={lastY} r={4} fill={LINE_COLOR} />
         <SvgText
           x={Math.min(lastX, CHART_WIDTH - 40)}
@@ -110,10 +116,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#0b0b0b',
+    color: colors.ink,
   },
   emptyText: {
     fontSize: 13,
-    color: '#52514e',
+    color: colors.inkMuted,
   },
 });

@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { createSession } from '../db/queries';
+import { createSession, getSessionHistory } from '../db/queries';
+import { computeStreakWeeks } from '../gamification';
 import type { CapacityRating } from '../types';
+import { colors, glow, mono, radius, spacing, type } from '../theme';
 
-const CAPACITY_OPTIONS: { value: CapacityRating; label: string; suggestedSets: number }[] = [
-  { value: 'low', label: 'Low', suggestedSets: 2 },
-  { value: 'medium', label: 'Medium', suggestedSets: 3 },
-  { value: 'high', label: 'High', suggestedSets: 4 },
+const CAPACITY_OPTIONS: { value: CapacityRating; label: string }[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ];
 
 export default function StartSessionScreen({
@@ -22,6 +24,11 @@ export default function StartSessionScreen({
   const db = useSQLiteContext();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streak, setStreak] = useState<number | null>(null);
+
+  useEffect(() => {
+    getSessionHistory(db).then((sessions) => setStreak(computeStreakWeeks(sessions)));
+  }, []);
 
   async function handleStart(rating: CapacityRating) {
     setStarting(true);
@@ -37,7 +44,12 @@ export default function StartSessionScreen({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>How's your energy today?</Text>
+      {streak !== null && streak > 0 && (
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakBadgeText}>🔥 {streak} week{streak === 1 ? '' : 's'} in a row</Text>
+        </View>
+      )}
+      <Text style={styles.title}>Are you ready, Emmet?</Text>
       <View style={styles.options}>
         {CAPACITY_OPTIONS.map((opt) => (
           <TouchableOpacity
@@ -47,7 +59,6 @@ export default function StartSessionScreen({
             onPress={() => handleStart(opt.value)}
           >
             <Text style={styles.optionLabel}>{opt.label}</Text>
-            <Text style={styles.optionSub}>~{opt.suggestedSets} sets/exercise</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -67,49 +78,60 @@ export default function StartSessionScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 24,
+    padding: spacing.xl,
+    gap: spacing.xl,
+  },
+  streakBadge: {
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    ...glow(colors.accent),
+  },
+  streakBadgeText: {
+    ...mono,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.accent,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '600',
+    ...type.title,
     textAlign: 'center',
   },
   options: {
     width: '100%',
-    gap: 12,
+    gap: spacing.md,
   },
   option: {
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 12,
-    paddingVertical: 20,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
   },
   optionLabel: {
     fontSize: 20,
-    fontWeight: '600',
-  },
-  optionSub: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 4,
+    fontWeight: '700',
+    color: colors.ink,
   },
   links: {
     flexDirection: 'row',
-    gap: 24,
-    marginTop: 12,
+    gap: spacing.xl,
+    marginTop: spacing.sm,
   },
   historyLinkText: {
     fontSize: 15,
-    color: '#333',
-    textDecorationLine: 'underline',
+    fontWeight: '600',
+    color: colors.accent,
   },
   error: {
-    color: '#c00',
+    color: colors.error,
     fontSize: 13,
     textAlign: 'center',
   },

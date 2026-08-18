@@ -7,7 +7,9 @@ import {
   getVariationsWithData,
   getWeightHistoryForVariation,
 } from '../db/queries';
+import { computeXpAndLevel, type XpResult } from '../gamification';
 import ProgressChart from '../components/ProgressChart';
+import { colors, glow, mono, radius, spacing, type } from '../theme';
 
 type VariationOption = { id: number; name: string; slotName: string };
 
@@ -15,7 +17,7 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
   const db = useSQLiteContext();
   const [totalWorkouts, setTotalWorkouts] = useState<number | null>(null);
   const [totalVolume, setTotalVolume] = useState<number | null>(null);
-  const [prCount, setPrCount] = useState<number | null>(null);
+  const [xp, setXp] = useState<XpResult | null>(null);
   const [variations, setVariations] = useState<VariationOption[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState<number | null>(null);
   const [chartPoints, setChartPoints] = useState<{ date: string; maxWeight: number }[]>([]);
@@ -28,20 +30,7 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
       const sets = await getAllSetsForStats(db);
       const volume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
       setTotalVolume(volume);
-
-      const byVariation = new Map<number, typeof sets>();
-      for (const s of sets) {
-        const list = byVariation.get(s.variationId) ?? [];
-        list.push(s);
-        byVariation.set(s.variationId, list);
-      }
-      let prs = 0;
-      for (const varSets of byVariation.values()) {
-        const maxWeight = Math.max(...varSets.map((s) => s.weight));
-        const latest = varSets[varSets.length - 1];
-        if (latest.weight >= maxWeight) prs++;
-      }
-      setPrCount(prs);
+      setXp(computeXpAndLevel(sets));
 
       const vars = await getVariationsWithData(db);
       setVariations(vars);
@@ -57,6 +46,7 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
   }, [selectedVariationId]);
 
   const selectedVariation = variations.find((v) => v.id === selectedVariationId);
+  const xpProgress = xp ? xp.xpIntoLevel / xp.xpForNextLevel : 0;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -64,6 +54,21 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.backLink}>Back</Text>
       </TouchableOpacity>
       <Text style={styles.title}>Dashboard</Text>
+
+      {xp && (
+        <View style={styles.levelCard}>
+          <View style={styles.levelHeader}>
+            <Text style={styles.levelBadge}>Level {xp.level}</Text>
+            <Text style={styles.levelXpText}>{xp.xpIntoLevel} / {xp.xpForNextLevel} XP</Text>
+          </View>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpFill, { width: `${Math.round(xpProgress * 100)}%` }]} />
+          </View>
+          {xp.prCount > 0 && (
+            <Text style={styles.prLine}>🏆 {xp.prCount} PR{xp.prCount === 1 ? '' : 's'} all-time</Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.statRow}>
         <View style={styles.statTile}>
@@ -77,8 +82,8 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
           </Text>
         </View>
         <View style={styles.statTile}>
-          <Text style={styles.statLabel}>Current PRs</Text>
-          <Text style={styles.statValue}>{prCount ?? '—'}</Text>
+          <Text style={styles.statLabel}>Total XP</Text>
+          <Text style={styles.statValue}>{xp?.totalXp ?? '—'}</Text>
         </View>
       </View>
 
@@ -117,67 +122,114 @@ export default function DashboardScreen({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 24,
-    gap: 20,
+    backgroundColor: colors.bg,
+    padding: spacing.xl,
+    gap: spacing.xl,
   },
   backLink: {
     fontSize: 15,
-    color: '#333',
-    textDecorationLine: 'underline',
+    fontWeight: '600',
+    color: colors.accent,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...type.title,
+  },
+  levelCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    ...glow(colors.accent),
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  levelBadge: {
+    ...mono,
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.accent,
+  },
+  levelXpText: {
+    ...mono,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.inkMuted,
+  },
+  xpTrack: {
+    height: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+    overflow: 'hidden',
+  },
+  xpFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  prLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.celebrate,
+    marginTop: spacing.xs,
   },
   statRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   statTile: {
     flex: 1,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#e1e0d9',
-    borderRadius: 12,
-    padding: 14,
-    gap: 4,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
   },
   statLabel: {
     fontSize: 12,
-    color: '#52514e',
+    fontWeight: '600',
+    color: colors.inkMuted,
   },
   statValue: {
+    ...mono,
     fontSize: 20,
-    fontWeight: '600',
-    color: '#0b0b0b',
+    fontWeight: '700',
+    color: colors.accent,
   },
   emptyText: {
     fontSize: 14,
-    color: '#52514e',
+    color: colors.inkMuted,
   },
   chartSection: {
-    gap: 16,
+    gap: spacing.lg,
   },
   picker: {
     flexGrow: 0,
   },
   pickerChip: {
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginRight: 8,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginRight: spacing.sm,
   },
   pickerChipSelected: {
-    backgroundColor: '#0b0b0b',
-    borderColor: '#0b0b0b',
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   pickerChipText: {
     fontSize: 13,
-    color: '#0b0b0b',
+    fontWeight: '600',
+    color: colors.ink,
   },
   pickerChipTextSelected: {
-    color: '#fff',
+    color: colors.accentInk,
   },
 });
