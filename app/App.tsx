@@ -6,10 +6,11 @@ import StartSessionScreen from './screens/StartSessionScreen';
 import ActiveSessionScreen from './screens/ActiveSessionScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import DashboardScreen from './screens/DashboardScreen';
+import { loadActiveSession } from './activeSessionStorage';
 
 type Screen =
   | { name: 'start' }
-  | { name: 'active'; sessionId: number }
+  | { name: 'active'; sessionId: number; initialSlotIndex?: number }
   | { name: 'history' }
   | { name: 'dashboard' };
 
@@ -26,7 +27,14 @@ export default function App() {
 // so screen-switching state must live below it, not above — otherwise state
 // changes here get silently dropped by that memoization.
 function AppContent() {
-  const [screen, setScreen] = useState<Screen>({ name: 'start' });
+  // Resume an in-progress session on launch (e.g. after a PWA reload) instead
+  // of always starting fresh — see activeSessionStorage.ts.
+  const [screen, setScreen] = useState<Screen>(() => {
+    const saved = loadActiveSession();
+    return saved
+      ? { name: 'active', sessionId: saved.sessionId, initialSlotIndex: saved.slotIndex }
+      : { name: 'start' };
+  });
 
   return (
     <>
@@ -40,6 +48,7 @@ function AppContent() {
       {screen.name === 'active' && (
         <ActiveSessionScreen
           sessionId={screen.sessionId}
+          initialSlotIndex={screen.initialSlotIndex}
           onSessionComplete={() => setScreen({ name: 'start' })}
         />
       )}

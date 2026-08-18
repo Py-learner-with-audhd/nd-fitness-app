@@ -37,6 +37,26 @@ export async function addVariation(
   return result.lastInsertRowId;
 }
 
+// Reuses an existing variation in this slot if the typed name matches one
+// (case-insensitive), otherwise creates a new one. This is what keeps
+// progressive-overload lookups working when every entry is typed rather than
+// tapped from a preset list — typing "Belt squat" twice must resolve to the
+// same variation_id both times, not two separate rows with no shared history.
+export async function findOrCreateVariation(
+  db: SQLiteDatabase,
+  slotId: number,
+  name: string
+): Promise<number> {
+  const trimmed = name.trim();
+  const existing = await db.getFirstAsync<{ id: number }>(
+    'SELECT id FROM variations WHERE slot_id = ? AND LOWER(name) = LOWER(?)',
+    slotId,
+    trimmed
+  );
+  if (existing) return existing.id;
+  return addVariation(db, slotId, trimmed);
+}
+
 export async function createSession(
   db: SQLiteDatabase,
   capacityRating: CapacityRating

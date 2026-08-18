@@ -4,13 +4,15 @@ import { useSQLiteContext } from 'expo-sqlite';
 import {
   addExerciseToSession,
   addSet,
-  addVariation,
+  findOrCreateVariation,
   getLastSetForVariation,
   getSetsForExerciseInSession,
   getSlotsWithVariations,
 } from '../db/queries';
 import type { LastSetForVariation, SetEntry, Slot, Variation } from '../types';
 import { colors, glow, mono, radius, spacing, type } from '../theme';
+import { SECTION_ORDER, sectionForSlotName } from '../sections';
+import { clearActiveSession, saveActiveSession } from '../activeSessionStorage';
 
 const RIR_OPTIONS = [
   { value: 5, label: '5', hint: 'Very easy' },
@@ -25,35 +27,64 @@ type SlotGroup = { slot: Slot; variations: Variation[] };
 
 export default function ActiveSessionScreen({
   sessionId,
+  initialSlotIndex = 0,
   onSessionComplete,
 }: {
   sessionId: number;
+  initialSlotIndex?: number;
   onSessionComplete: () => void;
 }) {
   const db = useSQLiteContext();
   const [slotGroups, setSlotGroups] = useState<SlotGroup[] | null>(null);
-  const [slotIndex, setSlotIndex] = useState(0);
+  const [slotIndex, setSlotIndex] = useState(initialSlotIndex);
   const [variationId, setVariationId] = useState<number | null>(null);
   const [exerciseInSessionId, setExerciseInSessionId] = useState<number | null>(null);
   const [lastSet, setLastSet] = useState<LastSetForVariation | null>(null);
   const [loggedSets, setLoggedSets] = useState<SetEntry[]>([]);
 
-  const [weight, setWeight] = useState(0);
+  const [weightText, setWeightText] = useState('0');
   const [reps, setReps] = useState(8);
   const [rir, setRir] = useState(2);
 
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customName, setCustomName] = useState('');
+  const [exerciseName, setExerciseName] = useState('');
+
+  function defaultNameFor(group: SlotGroup): string {
+    return group.variations.find((v) => v.is_default)?.name ?? '';
+  }
+
+  // The 18-slot template's DB order doesn't group by body part (e.g. Calves
+  // sits last, far from the other Legs slots) — resequence into the
+  // Legs/Back/Chest/Arms/Shoulders/Core walkthrough order requested, so
+  // exercises within a section actually run back-to-back.
+  function sortBySection(groups: SlotGroup[]): SlotGroup[] {
+    return [...groups].sort((a, b) => {
+      const sa = SECTION_ORDER.indexOf(sectionForSlotName(a.slot.name));
+      const sb = SECTION_ORDER.indexOf(sectionForSlotName(b.slot.name));
+      if (sa !== sb) return sa - sb;
+      return a.slot.order_index - b.slot.order_index;
+    });
+  }
 
   useEffect(() => {
-    getSlotsWithVariations(db).then((groups) => {
+    getSlotsWithVariations(db).then((raw) => {
+      const groups = sortBySection(raw);
       setSlotGroups(groups);
-      const first = groups[0];
+      const start = groups[initialSlotIndex] ? initialSlotIndex : 0;
+      const first = groups[start];
       if (first.variations.length === 1) {
-        selectVariation(first.variations[0].id, groups, 0);
+        selectVariation(first.variations[0].id, groups, start);
+      } else {
+        setExerciseName(defaultNameFor(first));
       }
     });
   }, []);
+
+  // Persists which session/slot is in progress so a reload (common for a
+  // home-screen PWA) resumes instead of silently starting a second session.
+  useEffect(() => {
+    if (!slotGroups) return;
+    saveActiveSession({ sessionId, slotIndex });
+  }, [slotGroups, sessionId, slotIndex]);
 
   async function selectVariation(varId: number, groups: SlotGroup[], idx: number) {
     setVariationId(varId);
@@ -63,32 +94,37 @@ export default function ActiveSessionScreen({
     setLoggedSets([]);
     const last = await getLastSetForVariation(db, varId, sessionId);
     setLastSet(last);
-    setWeight(last?.weight ?? 0);
+    setWeightText(last ? String(last.weight) : '0');
     setReps(last?.reps ?? 8);
     setRir(last ? last.rir : 2);
   }
 
-  async function handleAddCustomVariation() {
+  // Reuses an existing variation by name if it matches one already in this
+  // slot's pool (so progress history carries over), otherwise creates one.
+  async function handleSubmitExercise() {
     if (!slotGroups) return;
-    const name = customName.trim();
+    const name = exerciseName.trim();
     if (!name) return;
     const slot = slotGroups[slotIndex].slot;
-    const newId = await addVariation(db, slot.id, name);
+    const varId = await findOrCreateVariation(db, slot.id, name);
 
-    const updatedGroups = slotGroups.map((g, i) =>
-      i === slotIndex
-        ? { ...g, variations: [...g.variations, { id: newId, slot_id: slot.id, name, is_default: 0 }] }
-        : g
-    );
-    setSlotGroups(updatedGroups);
-    setShowCustomInput(false);
-    setCustomName('');
-    await selectVariation(newId, updatedGroups, slotIndex);
+    let groups = slotGroups;
+    const alreadyKnown = groups[slotIndex].variations.some((v) => v.id === varId);
+    if (!alreadyKnown) {
+      groups = groups.map((g, i) =>
+        i === slotIndex
+          ? { ...g, variations: [...g.variations, { id: varId, slot_id: slot.id, name, is_default: 0 }] }
+          : g
+      );
+      setSlotGroups(groups);
+    }
+    await selectVariation(varId, groups, slotIndex);
   }
 
   async function handleAddSet() {
     if (!exerciseInSessionId) return;
-    await addSet(db, exerciseInSessionId, weight, reps, rir);
+    const weightNum = parseFloat(weightText.replace(',', '.'));
+    await addSet(db, exerciseInSessionId, isNaN(weightNum) ? 0 : weightNum, reps, rir);
     const sets = await getSetsForExerciseInSession(db, exerciseInSessionId);
     setLoggedSets(sets);
   }
@@ -97,6 +133,7 @@ export default function ActiveSessionScreen({
     if (!slotGroups) return;
     const nextIndex = slotIndex + 1;
     if (nextIndex >= slotGroups.length) {
+      clearActiveSession();
       onSessionComplete();
       return;
     }
@@ -105,11 +142,11 @@ export default function ActiveSessionScreen({
     setExerciseInSessionId(null);
     setLastSet(null);
     setLoggedSets([]);
-    setShowCustomInput(false);
-    setCustomName('');
     const nextSlot = slotGroups[nextIndex];
     if (nextSlot.variations.length === 1) {
       selectVariation(nextSlot.variations[0].id, slotGroups, nextIndex);
+    } else {
+      setExerciseName(defaultNameFor(nextSlot));
     }
   }
 
@@ -122,48 +159,39 @@ export default function ActiveSessionScreen({
   }
 
   const current = slotGroups[slotIndex];
+  const currentSection = sectionForSlotName(current.slot.name);
+  const sectionSlots = slotGroups.filter((g) => sectionForSlotName(g.slot.name) === currentSection);
+  const indexInSection = sectionSlots.findIndex((g) => g.slot.id === current.slot.id) + 1;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.sectionKicker}>{currentSection}</Text>
       <Text style={styles.progress}>
-        Exercise {slotIndex + 1} of {slotGroups.length}
+        Exercise {indexInSection} of {sectionSlots.length}
       </Text>
       <Text style={styles.slotName}>{current.slot.name}</Text>
 
       {variationId === null ? (
         <View style={styles.variationPicker}>
-          {current.variations.map((v) => (
+          <View style={styles.customInputRow}>
+            <TextInput
+              style={styles.customInput}
+              placeholder="Exercise name"
+              placeholderTextColor={colors.inkFaint}
+              value={exerciseName}
+              onChangeText={setExerciseName}
+              onSubmitEditing={handleSubmitExercise}
+              returnKeyType="done"
+              autoFocus
+            />
             <TouchableOpacity
-              key={v.id}
-              style={styles.variationOption}
-              onPress={() => selectVariation(v.id, slotGroups, slotIndex)}
+              style={styles.customUseBtn}
+              disabled={!exerciseName.trim()}
+              onPress={handleSubmitExercise}
             >
-              <Text style={styles.variationOptionText}>{v.name}</Text>
+              <Text style={styles.customUseBtnText}>Start</Text>
             </TouchableOpacity>
-          ))}
-
-          {showCustomInput ? (
-            <View style={styles.customInputRow}>
-              <TextInput
-                style={styles.customInput}
-                placeholder="Exercise name"
-                value={customName}
-                onChangeText={setCustomName}
-                autoFocus
-              />
-              <TouchableOpacity
-                style={styles.customUseBtn}
-                disabled={!customName.trim()}
-                onPress={handleAddCustomVariation}
-              >
-                <Text style={styles.customUseBtnText}>Use this</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.customToggle} onPress={() => setShowCustomInput(true)}>
-              <Text style={styles.customToggleText}>+ Type your own</Text>
-            </TouchableOpacity>
-          )}
+          </View>
         </View>
       ) : (
         <View style={styles.exerciseBlock}>
@@ -179,15 +207,13 @@ export default function ActiveSessionScreen({
 
           <View style={styles.stepperRow}>
             <Text style={styles.stepperLabel}>Weight (kg)</Text>
-            <View style={styles.stepperControls}>
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => setWeight((w) => Math.max(0, w - 2.5))}>
-                <Text style={styles.stepperBtnText}>-</Text>
-              </TouchableOpacity>
-              <Text style={styles.stepperValue}>{weight}</Text>
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => setWeight((w) => w + 2.5)}>
-                <Text style={styles.stepperBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
+            <TextInput
+              style={styles.weightInput}
+              value={weightText}
+              onChangeText={setWeightText}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
           </View>
 
           <View style={styles.stepperRow}>
@@ -255,33 +281,24 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.lg,
   },
+  sectionKicker: {
+    ...mono,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: colors.accent,
+  },
   progress: {
     ...type.kicker,
+    letterSpacing: 0,
+    textTransform: 'none',
   },
   slotName: {
     ...type.title,
   },
   variationPicker: {
     gap: spacing.md,
-  },
-  variationOption: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-  },
-  variationOptionText: {
-    ...type.body,
-    fontWeight: '600',
-  },
-  customToggle: {
-    paddingVertical: spacing.sm,
-  },
-  customToggleText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.accent,
   },
   customInputRow: {
     flexDirection: 'row',
@@ -333,6 +350,20 @@ const styles = StyleSheet.create({
   stepperLabel: {
     ...type.body,
     fontWeight: '600',
+  },
+  weightInput: {
+    ...mono,
+    minWidth: 90,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   stepperControls: {
     flexDirection: 'row',
